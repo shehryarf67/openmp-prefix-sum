@@ -8,6 +8,7 @@
 #include <exception>
 #include <iomanip>
 #include <iostream>
+#include <numeric>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -19,7 +20,7 @@ namespace {
 struct Options {
     std::size_t n = (1ULL << 22) + 3;
     int threads = 4;
-    int repeats = 3;
+    int repeats = 9;
     std::string mode = "both"; // sequential, direct, chunked, both
     scan::ScanType scan_type = scan::ScanType::Exclusive;
     bool csv = false;
@@ -27,6 +28,11 @@ struct Options {
 };
 
 volatile scan::value_t benchmark_sink = 0;
+
+struct BenchmarkStats {
+    double average_ms = 0.0;
+    double median_ms = 0.0;
+};
 
 std::string scan_type_name(scan::ScanType scan_type) {
     return scan_type == scan::ScanType::Exclusive ? "exclusive" : "inclusive";
@@ -52,7 +58,7 @@ void print_usage(const char* program) {
         << "Options:\n"
         << "  --n <N>              Input size (default: 2^22 + 3)\n"
         << "  --threads <T>        OpenMP thread count (default: 4)\n"
-        << "  --repeats <R>        Timed repetitions (default: 3)\n"
+        << "  --repeats <R>        Timed repetitions (default: 9)\n"
         << "  --mode <M>           sequential | direct | chunked | both (default: both)\n"
         << "  --scan-type <S>      exclusive | inclusive (default: exclusive)\n"
         << "  --csv                Print compact CSV row\n"
@@ -105,17 +111,53 @@ std::vector<scan::value_t> make_input(std::size_t n) {
     return input;
 }
 
-template <typename Func>
-double benchmark_ms(Func&& func, int repeats) {
-    double total_ms = 0.0;
+double median_of(std::vector<double> values) {
+    if (values.empty()) {
+        return 0.0;
+    }
+
+    std::sort(values.begin(), values.end());
+    const std::size_t middle = values.size() / 2;
+    if (values.size() % 2 == 1) {
+        return values[middle];
+    }
+    return (values[middle - 1] + values[middle]) / 2.0;
+}
+
+template <typename Func, typename GuardFunc>
+BenchmarkStats benchmark_scan(
+    Func&& func,
+    GuardFunc&& guard_func,
+    int repeats,
+    int warmups = 2
+) {
+    for (int i = 0; i < warmups; ++i) {
+        func();
+        benchmark_sink =
+            static_cast<scan::value_t>(benchmark_sink ^ guard_func());
+    }
+
+    std::vector<double> times_ms;
+    times_ms.reserve(static_cast<std::size_t>(repeats));
+
     for (int r = 0; r < repeats; ++r) {
         const auto start = std::chrono::high_resolution_clock::now();
-        const scan::value_t guard = func();
+        func();
         const auto end = std::chrono::high_resolution_clock::now();
-        benchmark_sink = static_cast<scan::value_t>(benchmark_sink ^ guard);
-        total_ms += std::chrono::duration<double, std::milli>(end - start).count();
+        times_ms.push_back(
+            std::chrono::duration<double, std::milli>(end - start).count()
+        );
+        benchmark_sink =
+            static_cast<scan::value_t>(benchmark_sink ^ guard_func());
     }
-    return total_ms / static_cast<double>(repeats);
+
+    const double total_ms =
+        std::accumulate(times_ms.begin(), times_ms.end(), 0.0);
+
+    return {
+        total_ms / static_cast<double>(times_ms.size()),
+        median_of(times_ms)
+    };
 }
 
 scan::value_t output_guard(const std::vector<scan::value_t>& output) {
@@ -213,29 +255,39 @@ int main(int argc, char** argv) {
         const std::vector<scan::value_t> input = make_input(options.n);
 
         std::vector<scan::value_t> seq_output;
-        const double seq_ms = benchmark_ms([&]() -> scan::value_t {
+        seq_output.resize(options.n);
+        const BenchmarkStats seq_stats = benchmark_scan([&]() {
             scan::sequential_scan_into(input, seq_output, options.scan_type);
+        }, [&]() {
             return output_guard(seq_output);
         }, options.repeats);
 
         if (options.csv) {
             std::cout
                 << "n,threads,scan_type,mode,sequential_ms,"
-                << "parallel_ms,speedup,efficiency,status\n";
+                << "parallel_ms,speedup,efficiency,status,repeats,"
+                << "timing_method,median_sequential_ms,median_parallel_ms,"
+                << "average_sequential_ms,average_parallel_ms\n";
         }
 
         if (options.mode == "sequential") {
             if (options.csv) {
                 std::cout << options.n << ',' << options.threads << ','
                           << scan_type_name(options.scan_type) << ",sequential,"
-                          << std::fixed << std::setprecision(4)
-                          << seq_ms << ",,,,OK\n";
+                          << std::fixed << std::setprecision(6)
+                          << seq_stats.median_ms << ",,,,OK,"
+                          << options.repeats << ",median,"
+                          << seq_stats.median_ms << ",,"
+                          << seq_stats.average_ms << ",\n";
             } else {
                 std::cout << "Mode: sequential\n";
                 std::cout << "Scan type: " << scan_type_name(options.scan_type) << "\n";
                 std::cout << "Input size: " << options.n << "\n";
                 std::cout << std::fixed << std::setprecision(4);
-                std::cout << "Sequential average time (ms): " << seq_ms << "\n";
+                std::cout << "Timed repetitions: " << options.repeats << "\n";
+                std::cout << "Warm-up runs: 2\n";
+                std::cout << "Sequential median time (ms): " << seq_stats.median_ms << "\n";
+                std::cout << "Sequential average time (ms): " << seq_stats.average_ms << "\n";
                 std::cout << "Correctness: PASS (reference run)\n\n";
             }
             return 0;
@@ -243,25 +295,32 @@ int main(int argc, char** argv) {
 
         auto run_parallel = [&](const std::string& label) {
             std::vector<scan::value_t> par_output;
-            double par_ms = 0.0;
+            scan::ChunkedScanWorkspace chunk_workspace;
+            par_output.resize(options.n);
+            chunk_workspace.resize(options.threads);
+            BenchmarkStats par_stats;
 
             if (label == "direct") {
-                par_ms = benchmark_ms([&]() -> scan::value_t {
-                    par_output = scan::openmp_blelloch_scan(
-                        input,
-                        options.threads,
-                        options.scan_type
-                    );
-                    return output_guard(par_output);
-                }, options.repeats);
-            } else if (label == "chunked") {
-                par_ms = benchmark_ms([&]() -> scan::value_t {
-                    scan::openmp_chunked_scan_into(
+                par_stats = benchmark_scan([&]() {
+                    scan::openmp_blelloch_scan_into(
                         input,
                         par_output,
                         options.threads,
                         options.scan_type
                     );
+                }, [&]() {
+                    return output_guard(par_output);
+                }, options.repeats);
+            } else if (label == "chunked") {
+                par_stats = benchmark_scan([&]() {
+                    scan::openmp_chunked_scan_into(
+                        input,
+                        par_output,
+                        chunk_workspace,
+                        options.threads,
+                        options.scan_type
+                    );
+                }, [&]() {
                     return output_guard(par_output);
                 }, options.repeats);
             } else {
@@ -270,24 +329,32 @@ int main(int argc, char** argv) {
 
             std::size_t mismatch = 0;
             const bool ok = scan::verify_equal(seq_output, par_output, &mismatch);
-            const double speedup = par_ms > 0.0 ? seq_ms / par_ms : 0.0;
+            const double speedup =
+                par_stats.median_ms > 0.0 ? seq_stats.median_ms / par_stats.median_ms : 0.0;
             const double efficiency = speedup / static_cast<double>(options.threads);
 
             if (options.csv) {
                 std::cout << options.n << ',' << options.threads << ','
                           << scan_type_name(options.scan_type) << ',' << label << ','
-                          << std::fixed << std::setprecision(4)
-                          << seq_ms << ',' << par_ms << ',' << speedup << ','
-                          << efficiency << ',' << (ok ? "OK" : "FAIL") << '\n';
+                          << std::fixed << std::setprecision(6)
+                          << seq_stats.median_ms << ',' << par_stats.median_ms << ','
+                          << speedup << ',' << efficiency << ','
+                          << (ok ? "OK" : "FAIL") << ','
+                          << options.repeats << ",median,"
+                          << seq_stats.median_ms << ',' << par_stats.median_ms << ','
+                          << seq_stats.average_ms << ',' << par_stats.average_ms << '\n';
             } else {
                 std::cout << "Mode: " << label << "\n";
                 std::cout << "Scan type: " << scan_type_name(options.scan_type) << "\n";
                 std::cout << "Input size: " << options.n << "\n";
                 std::cout << "Threads: " << options.threads << "\n";
-                std::cout << "Repeats: " << options.repeats << "\n";
+                std::cout << "Timed repetitions: " << options.repeats << "\n";
+                std::cout << "Warm-up runs: 2\n";
                 std::cout << std::fixed << std::setprecision(4);
-                std::cout << "Sequential average time (ms): " << seq_ms << "\n";
-                std::cout << "Parallel average time (ms):   " << par_ms << "\n";
+                std::cout << "Sequential median time (ms):  " << seq_stats.median_ms << "\n";
+                std::cout << "Parallel median time (ms):    " << par_stats.median_ms << "\n";
+                std::cout << "Sequential average time (ms): " << seq_stats.average_ms << "\n";
+                std::cout << "Parallel average time (ms):   " << par_stats.average_ms << "\n";
                 std::cout << "Speedup:                      " << speedup << "\n";
                 std::cout << "Efficiency:                   " << efficiency << "\n";
                 std::cout << "Correctness:                  " << (ok ? "PASS" : "FAIL") << "\n";

@@ -9,10 +9,6 @@ namespace scan {
 
 namespace {
 
-struct alignas(64) PaddedValue {
-    value_t value = 0;
-};
-
 struct ChunkRange {
     std::size_t start;
     std::size_t end;
@@ -51,6 +47,18 @@ ChunkRange chunk_range(std::size_t n, int tid, int thread_count) {
 }
 
 } // namespace
+
+void ChunkedScanWorkspace::resize(int thread_count) {
+    validate_thread_count(thread_count);
+
+    const auto size = static_cast<std::size_t>(thread_count);
+    if (chunk_sums.size() != size) {
+        chunk_sums.resize(size);
+    }
+    if (chunk_offsets.size() != size) {
+        chunk_offsets.resize(size);
+    }
+}
 
 std::size_t next_power_of_two(std::size_t n) {
     if (n <= 1) return 1;
@@ -108,18 +116,22 @@ std::vector<value_t> sequential_scan(
     return output;
 }
 
-std::vector<value_t> openmp_blelloch_exclusive_scan(
+void openmp_blelloch_scan_into(
     const std::vector<value_t>& input,
-    int num_threads
+    std::vector<value_t>& output,
+    int num_threads,
+    ScanType scan_type
 ) {
     validate_thread_count(num_threads);
 
     const std::size_t n = input.size();
-    if (n == 0) return {};
+    output.resize(n);
+    if (n == 0) return;
 
     const std::size_t padded_n = next_power_of_two(n);
-    std::vector<value_t> tree(padded_n, 0);
-    std::copy(input.begin(), input.end(), tree.begin());
+    output.resize(padded_n);
+    std::copy(input.begin(), input.end(), output.begin());
+    std::fill(output.begin() + static_cast<std::ptrdiff_t>(n), output.end(), 0);
 
     omp_set_dynamic(0);
 
@@ -136,7 +148,7 @@ std::vector<value_t> openmp_blelloch_exclusive_scan(
                 const std::size_t base = static_cast<std::size_t>(group) * stride;
                 const std::size_t left = base + half - 1;
                 const std::size_t right = base + stride - 1;
-                tree[right] += tree[left];
+                output[right] += output[left];
             }
 
             if (stride == padded_n) {
@@ -147,7 +159,7 @@ std::vector<value_t> openmp_blelloch_exclusive_scan(
         // Root becomes identity for exclusive scan.
         #pragma omp single
         {
-            tree[padded_n - 1] = 0;
+            output[padded_n - 1] = 0;
         }
 
         // Down-sweep / distribute phase, also synchronized at every level.
@@ -161,23 +173,34 @@ std::vector<value_t> openmp_blelloch_exclusive_scan(
                 const std::size_t left = base + half - 1;
                 const std::size_t right = base + stride - 1;
 
-                const value_t temp = tree[left];
-                tree[left] = tree[right];
-                tree[right] += temp;
+                const value_t temp = output[left];
+                output[left] = output[right];
+                output[right] += temp;
             }
         }
     }
 
-    tree.resize(n);
-    return tree;
+    output.resize(n);
+    if (scan_type == ScanType::Inclusive) {
+        add_input_in_place(output, input, num_threads);
+    }
+}
+
+std::vector<value_t> openmp_blelloch_exclusive_scan(
+    const std::vector<value_t>& input,
+    int num_threads
+) {
+    std::vector<value_t> output;
+    openmp_blelloch_scan_into(input, output, num_threads, ScanType::Exclusive);
+    return output;
 }
 
 std::vector<value_t> openmp_blelloch_inclusive_scan(
     const std::vector<value_t>& input,
     int num_threads
 ) {
-    std::vector<value_t> output = openmp_blelloch_exclusive_scan(input, num_threads);
-    add_input_in_place(output, input, num_threads);
+    std::vector<value_t> output;
+    openmp_blelloch_scan_into(input, output, num_threads, ScanType::Inclusive);
     return output;
 }
 
@@ -186,15 +209,25 @@ std::vector<value_t> openmp_blelloch_scan(
     int num_threads,
     ScanType scan_type
 ) {
-    if (scan_type == ScanType::Exclusive) {
-        return openmp_blelloch_exclusive_scan(input, num_threads);
-    }
-    return openmp_blelloch_inclusive_scan(input, num_threads);
+    std::vector<value_t> output;
+    openmp_blelloch_scan_into(input, output, num_threads, scan_type);
+    return output;
 }
 
 void openmp_chunked_scan_into(
     const std::vector<value_t>& input,
     std::vector<value_t>& output,
+    int num_threads,
+    ScanType scan_type
+) {
+    ChunkedScanWorkspace workspace;
+    openmp_chunked_scan_into(input, output, workspace, num_threads, scan_type);
+}
+
+void openmp_chunked_scan_into(
+    const std::vector<value_t>& input,
+    std::vector<value_t>& output,
+    ChunkedScanWorkspace& workspace,
     int num_threads,
     ScanType scan_type
 ) {
@@ -206,8 +239,7 @@ void openmp_chunked_scan_into(
 
     omp_set_dynamic(0);
 
-    std::vector<PaddedValue> chunk_sums(static_cast<std::size_t>(num_threads));
-    std::vector<PaddedValue> chunk_offsets(static_cast<std::size_t>(num_threads));
+    workspace.resize(num_threads);
 
     #pragma omp parallel num_threads(num_threads)
     {
@@ -221,8 +253,9 @@ void openmp_chunked_scan_into(
             running_sum += input[i];
         }
 
-        chunk_sums[static_cast<std::size_t>(tid)].value = running_sum;
+        workspace.chunk_sums[static_cast<std::size_t>(tid)].value = running_sum;
 
+        // Required: all chunk totals must be visible before one thread scans them.
         #pragma omp barrier
 
         #pragma omp single
@@ -230,12 +263,14 @@ void openmp_chunked_scan_into(
             value_t offset = 0;
             for (int i = 0; i < actual_threads; ++i) {
                 const auto index = static_cast<std::size_t>(i);
-                chunk_offsets[index].value = offset;
-                offset += chunk_sums[index].value;
+                workspace.chunk_offsets[index].value = offset;
+                offset += workspace.chunk_sums[index].value;
             }
         }
 
-        const value_t offset = chunk_offsets[static_cast<std::size_t>(tid)].value;
+        // The implicit barrier after single ensures offsets are ready here.
+        const value_t offset =
+            workspace.chunk_offsets[static_cast<std::size_t>(tid)].value;
         const bool inclusive = scan_type == ScanType::Inclusive;
 
         if (inclusive) {

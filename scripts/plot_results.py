@@ -52,6 +52,7 @@ def load_rows(csv_path: Path) -> list[dict[str, object]]:
                     "threads": int(row["threads"]),
                     "scan_type": row["scan_type"],
                     "mode": row["mode"],
+                    "timing_method": row.get("timing_method", "average"),
                     "speedup": float(row["speedup"]),
                     "efficiency": float(row["efficiency"]),
                 }
@@ -157,12 +158,21 @@ def render_chart(
     metric_title = "Speedup" if metric == "speedup" else "Efficiency"
     title = f"{metric_title}: {mode} {scan_type}"
 
+    timing_methods = sorted({str(row.get("timing_method", "average")) for row in subset})
+    timing_label = "/".join(timing_methods)
+
     elements = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
         f'viewBox="0 0 {width} {height}">',
         '<rect width="100%" height="100%" fill="#ffffff"/>',
         svg_text(width / 2, 34, title, size=24, weight="700"),
-        svg_text(width / 2, 58, "Generated from results.csv", size=13, fill="#4b5563"),
+        svg_text(
+            width / 2,
+            58,
+            f"Generated from results.csv using {timing_label} timing",
+            size=13,
+            fill="#4b5563",
+        ),
         f'<line x1="{left}" y1="{top}" x2="{left}" y2="{top + plot_h}" '
         'stroke="#111827" stroke-width="1.4"/>',
         f'<line x1="{left}" y1="{top + plot_h}" x2="{left + plot_w}" '

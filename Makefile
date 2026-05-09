@@ -1,5 +1,5 @@
 CXX ?= g++
-CXXFLAGS ?= -O3 -std=c++17 -Wall -Wextra -pedantic -fopenmp
+CXXFLAGS ?= -O3 -march=native -std=c++17 -Wall -Wextra -pedantic -fopenmp
 LDFLAGS ?= -fopenmp
 
 TARGET := prefix_scan
@@ -14,7 +14,7 @@ $(TARGET): $(SRC) $(HDR)
 	$(CXX) $(CXXFLAGS) $(SRC) -o $(TARGET) $(LDFLAGS)
 
 run: $(TARGET)
-	./$(TARGET) --n 1048579 --threads 4 --repeats 3 --mode both --scan-type exclusive
+	./$(TARGET) --n 1048579 --threads 4 --repeats 9 --mode both --scan-type exclusive
 
 test: $(TARGET)
 	./$(TARGET) --test

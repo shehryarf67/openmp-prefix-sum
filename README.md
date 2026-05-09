@@ -83,7 +83,22 @@ make
 The Makefile uses:
 
 ```bash
-g++ -O3 -std=c++17 -fopenmp
+g++ -O3 -march=native -std=c++17 -fopenmp
+```
+
+`-march=native` enables CPU-specific optimizations for local benchmarking. For
+portable builds, override the flags explicitly, for example:
+
+```bash
+make CXXFLAGS="-O3 -std=c++17 -Wall -Wextra -pedantic -fopenmp"
+```
+
+The scan value type defaults to `int` to reduce memory bandwidth pressure in
+the benchmark sizes used here. For wider sums, build with a different type:
+
+```bash
+make CXXFLAGS="-O3 -march=native -std=c++17 -Wall -Wextra \
+-pedantic -fopenmp -DSCAN_VALUE_TYPE=std::int64_t"
 ```
 
 ## Correctness Tests
@@ -111,13 +126,13 @@ larger array, and multiple thread counts.
 Run both OpenMP versions with exclusive scan:
 
 ```bash
-./prefix_scan --n 1000000 --threads 4 --repeats 5 --mode both --scan-type exclusive
+./prefix_scan --n 1000000 --threads 4 --repeats 9 --mode both --scan-type exclusive
 ```
 
 Run the chunked inclusive version:
 
 ```bash
-./prefix_scan --n 1000000 --threads 8 --repeats 5 --mode chunked --scan-type inclusive
+./prefix_scan --n 1000000 --threads 8 --repeats 9 --mode chunked --scan-type inclusive
 ```
 
 Run only the sequential baseline:
@@ -129,16 +144,21 @@ Run only the sequential baseline:
 One benchmark example:
 
 ```text
-$ ./prefix_scan --n 1000000 --threads 4 --repeats 5 --mode chunked --scan-type exclusive
+$ OMP_PROC_BIND=true OMP_PLACES=cores ./prefix_scan \
+    --n 1000000 --threads 4 --repeats 9 \
+    --mode chunked --scan-type exclusive
 Mode: chunked
 Scan type: exclusive
 Input size: 1000000
 Threads: 4
-Repeats: 5
-Sequential average time (ms): 1.9656
-Parallel average time (ms):   2.7694
-Speedup:                      0.7097
-Efficiency:                   0.1774
+Timed repetitions: 9
+Warm-up runs: 2
+Sequential median time (ms):  0.8310
+Parallel median time (ms):    0.6285
+Sequential average time (ms): 0.7872
+Parallel average time (ms):   0.7513
+Speedup:                      1.3221
+Efficiency:                   0.3305
 Correctness:                  PASS
 ```
 
@@ -154,17 +174,23 @@ Correctness:                  PASS
 --test
 ```
 
-Timed runs report average time across repetitions.
+Timed runs perform two warm-up runs first, then report median and average time
+across the requested repetitions. Speedup and efficiency use the median times
+to reduce the effect of timing outliers.
 
 ## Metrics
 
 For parallel modes, the program reports:
 
-- `sequential_ms`: average sequential reference time.
-- `parallel_ms`: average OpenMP time.
+- `sequential_ms`: median sequential reference time.
+- `parallel_ms`: median OpenMP time.
 - `speedup`: `sequential_ms / parallel_ms`.
 - `efficiency`: `speedup / thread_count`.
 - `status`: correctness result against the sequential baseline.
+- `repeats`: number of timed repetitions.
+- `timing_method`: currently `median`.
+- `median_sequential_ms` and `median_parallel_ms`: explicit median columns.
+- `average_sequential_ms` and `average_parallel_ms`: average timing columns.
 
 ## Benchmark Script
 
@@ -180,21 +206,32 @@ By default, it runs:
 - thread counts: `1 2 4 8`
 - modes: `direct chunked`
 - scan types: `exclusive inclusive`
+- timed repetitions: `9`
+
+The script sets these OpenMP runtime hints unless the environment already
+provides different values:
+
+```bash
+export OMP_PROC_BIND=true
+export OMP_PLACES=cores
+```
 
 Results are saved to `results.csv` with:
 
 ```text
-n,threads,scan_type,mode,sequential_ms,parallel_ms,speedup,efficiency,status
+n,threads,scan_type,mode,sequential_ms,parallel_ms,speedup,efficiency,status,
+repeats,timing_method,median_sequential_ms,median_parallel_ms,
+average_sequential_ms,average_parallel_ms
 ```
 
 You can override the sweep without editing the script:
 
 ```bash
-SIZES="10000 100000" THREADS="1 2 4" REPEATS=5 ./scripts/run_benchmarks.sh
+SIZES="10000 100000" THREADS="1 2 4" REPEATS=9 ./scripts/run_benchmarks.sh
 python3 scripts/plot_results.py results.csv
 ```
 
-For a larger memory-bandwidth stress test, use an override such as
+For a larger memory-bandwidth stress test, run with `INCLUDE_50M=1` or set
 `SIZES="10000 100000 1000000 10000000 50000000"` if the machine has enough
 available memory.
 
@@ -222,10 +259,10 @@ Intel(R) Core(TM) i5-7300U CPU @ 2.60GHz
 ```
 
 The full sweep produced 64 successful benchmark rows. The best observed row was
-the chunked exclusive scan at `n=10000000` and 1 OpenMP thread:
+the chunked exclusive scan at `n=100000` and 4 OpenMP threads:
 
 ```text
-sequential_ms=28.4287, parallel_ms=26.7592, speedup=1.0624, efficiency=1.0624
+median_sequential_ms=0.045868, median_parallel_ms=0.029516, speedup=1.554005, efficiency=0.388501
 ```
 
 For larger inputs, the chunked implementation was consistently much faster than
@@ -234,10 +271,10 @@ this 2-core/4-thread CPU. Representative rows from `results.csv`:
 
 | Mode | Scan | n | Threads | Sequential ms | Parallel ms | Speedup | Efficiency |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| direct | exclusive | 10000000 | 4 | 25.2433 | 225.3693 | 0.1120 | 0.0280 |
-| direct | inclusive | 10000000 | 4 | 24.7321 | 215.6207 | 0.1147 | 0.0287 |
-| chunked | exclusive | 10000000 | 4 | 23.9236 | 29.0129 | 0.8246 | 0.2061 |
-| chunked | inclusive | 10000000 | 4 | 25.5366 | 37.7018 | 0.6773 | 0.1693 |
+| direct | exclusive | 10000000 | 4 | 7.8769 | 85.8320 | 0.0918 | 0.0229 |
+| direct | inclusive | 10000000 | 4 | 6.1522 | 82.9313 | 0.0742 | 0.0185 |
+| chunked | exclusive | 10000000 | 4 | 6.5529 | 7.8028 | 0.8398 | 0.2100 |
+| chunked | inclusive | 10000000 | 4 | 8.3552 | 13.2170 | 0.6322 | 0.1580 |
 
 These results show that the direct Blelloch version is useful for explaining the
 algorithm, while the chunked version is the better practical OpenMP design.
@@ -246,6 +283,8 @@ algorithm, while the chunked version is the better practical OpenMP design.
 
 - Large scans are mostly memory-bound: the code streams through large vectors
   and performs very little arithmetic per element.
+- The default `int` value type reduces memory traffic for the benchmark, but
+  very large sums may require rebuilding with a wider `SCAN_VALUE_TYPE`.
 - The direct Blelloch implementation synchronizes at every tree level, so
   barrier overhead is high relative to the work per level.
 - The chunked version reduces synchronization by doing local work inside one

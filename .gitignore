@@ -1,2 +1,5 @@
 prefix_scan
+prefix_scan_gprof
+gmon.out
+perf*.data
 *.o

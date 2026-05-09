@@ -1,0 +1,87 @@
+digraph chunked_call_graph {
+  graph [
+    rankdir=LR,
+    bgcolor="white",
+    fontname="Arial",
+    label="Chunked OpenMP Prefix Scan Call Graph (gprof fallback)",
+    labelloc=t,
+    fontsize=20
+  ];
+
+  node [
+    shape=box,
+    style="rounded,filled",
+    fontname="Arial",
+    fontsize=12,
+    fillcolor="#f8fafc",
+    color="#334155"
+  ];
+
+  edge [
+    fontname="Arial",
+    fontsize=10,
+    color="#475569",
+    arrowsize=0.8
+  ];
+
+  main [
+    label="main\nCLI + benchmark harness",
+    fillcolor="#dbeafe"
+  ];
+
+  make_input [
+    label="make_input(n)\ncalled 1x\n5.6% self in gprof run",
+    fillcolor="#e0f2fe"
+  ];
+
+  seq [
+    label="sequential_scan_into(...)\ncalled 11x\n25.0% self",
+    fillcolor="#dcfce7"
+  ];
+
+  bench_lambda [
+    label="benchmark lambda\ncalls scan during warmups + repeats",
+    fillcolor="#ede9fe"
+  ];
+
+  chunked [
+    label="openmp_chunked_scan_into(...)\ncalled 11x\nsingle OpenMP parallel region",
+    fillcolor="#fef3c7"
+  ];
+
+  workspace [
+    label="ChunkedScanWorkspace::resize(...)\ncalled 12x\nreuses padded arrays",
+    fillcolor="#ffedd5"
+  ];
+
+  omp_region [
+    label="OpenMP worker region\nlocal chunk scan -> chunk sums -> offsets -> offset add",
+    fillcolor="#fee2e2"
+  ];
+
+  verify [
+    label="verify_equal(...)\ncalled 1x\nafter timing",
+    fillcolor="#f1f5f9"
+  ];
+
+  median [
+    label="median_of(times)\ncalled 7x\npost-processing",
+    fillcolor="#f1f5f9"
+  ];
+
+  output [
+    label="CSV / text output\nnot inside timed scan section",
+    fillcolor="#f1f5f9"
+  ];
+
+  main -> make_input [label="1x"];
+  main -> seq [label="11x"];
+  main -> bench_lambda [label="1x"];
+  bench_lambda -> chunked [label="11x"];
+  chunked -> workspace [label="11x"];
+  chunked -> omp_region [label="4 threads"];
+  main -> median [label="6x"];
+  bench_lambda -> median [label="1x"];
+  bench_lambda -> verify [label="1x"];
+  main -> output;
+}

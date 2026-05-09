@@ -36,11 +36,16 @@ length.
 - `openmp_blelloch_scan`: direct textbook-style OpenMP Blelloch scan over a
   padded tree.
 - `openmp_chunked_scan`: practical `n > p` OpenMP version where each thread
-  scans a local chunk, chunk sums are scanned, and offsets are added back.
+  scans a local chunk, one thread scans the small chunk-total array, and all
+  threads add their offsets.
 
 The chunked version mirrors the important CUDA baseline ideas in OpenMP form:
 block-level/local scan, block sums, hierarchical scan of sums, and uniform add
-of block offsets.
+of block offsets. In this CPU/OpenMP project it is the main practical
+implementation because it does most work locally per thread and uses only two
+necessary synchronization points. The direct Blelloch version remains useful as
+the clearer theoretical tree implementation, but it synchronizes at every tree
+level and is usually slower on shared-memory CPUs.
 
 ## Project Structure
 
@@ -124,16 +129,16 @@ Run only the sequential baseline:
 One benchmark example:
 
 ```text
-$ ./prefix_scan --n 1000000 --threads 4 --repeats 3 --mode chunked --scan-type exclusive
+$ ./prefix_scan --n 1000000 --threads 4 --repeats 5 --mode chunked --scan-type exclusive
 Mode: chunked
 Scan type: exclusive
 Input size: 1000000
 Threads: 4
-Repeats: 3
-Sequential average time (ms): 7.5038
-Parallel average time (ms):   22.5028
-Speedup:                      0.3335
-Efficiency:                   0.0834
+Repeats: 5
+Sequential average time (ms): 1.9656
+Parallel average time (ms):   2.7694
+Speedup:                      0.7097
+Efficiency:                   0.1774
 Correctness:                  PASS
 ```
 
@@ -189,6 +194,10 @@ SIZES="10000 100000" THREADS="1 2 4" REPEATS=5 ./scripts/run_benchmarks.sh
 python3 scripts/plot_results.py results.csv
 ```
 
+For a larger memory-bandwidth stress test, use an override such as
+`SIZES="10000 100000 1000000 10000000 50000000"` if the machine has enough
+available memory.
+
 The plotting script uses only the Python standard library and writes SVG files
 to `charts/`:
 
@@ -213,10 +222,10 @@ Intel(R) Core(TM) i5-7300U CPU @ 2.60GHz
 ```
 
 The full sweep produced 64 successful benchmark rows. The best observed row was
-the chunked exclusive scan at `n=100000` and 1 OpenMP thread:
+the chunked exclusive scan at `n=10000000` and 1 OpenMP thread:
 
 ```text
-sequential_ms=0.5086, parallel_ms=0.3624, speedup=1.4035, efficiency=1.4035
+sequential_ms=28.4287, parallel_ms=26.7592, speedup=1.0624, efficiency=1.0624
 ```
 
 For larger inputs, the chunked implementation was consistently much faster than
@@ -225,10 +234,10 @@ this 2-core/4-thread CPU. Representative rows from `results.csv`:
 
 | Mode | Scan | n | Threads | Sequential ms | Parallel ms | Speedup | Efficiency |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| direct | exclusive | 10000000 | 4 | 62.5019 | 273.8240 | 0.2283 | 0.0571 |
-| direct | inclusive | 10000000 | 4 | 58.0162 | 285.5614 | 0.2032 | 0.0508 |
-| chunked | exclusive | 10000000 | 4 | 55.3941 | 64.1421 | 0.8636 | 0.2159 |
-| chunked | inclusive | 10000000 | 4 | 55.1748 | 61.0494 | 0.9038 | 0.2259 |
+| direct | exclusive | 10000000 | 4 | 25.2433 | 225.3693 | 0.1120 | 0.0280 |
+| direct | inclusive | 10000000 | 4 | 24.7321 | 215.6207 | 0.1147 | 0.0287 |
+| chunked | exclusive | 10000000 | 4 | 23.9236 | 29.0129 | 0.8246 | 0.2061 |
+| chunked | inclusive | 10000000 | 4 | 25.5366 | 37.7018 | 0.6773 | 0.1693 |
 
 These results show that the direct Blelloch version is useful for explaining the
 algorithm, while the chunked version is the better practical OpenMP design.
@@ -239,8 +248,8 @@ algorithm, while the chunked version is the better practical OpenMP design.
   and performs very little arithmetic per element.
 - The direct Blelloch implementation synchronizes at every tree level, so
   barrier overhead is high relative to the work per level.
-- The chunked version reduces synchronization, but it still needs extra memory
-  passes for chunk sums and offset addition.
+- The chunked version reduces synchronization by doing local work inside one
+  OpenMP parallel region, but it still needs a final offset-add pass.
 - The CUDA project is used only as a conceptual reference. This repository does
   not use CUDA, GPU kernels, shared memory, or device-side synchronization, so
   the timings should not be compared as GPU performance results.

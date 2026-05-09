@@ -17,6 +17,11 @@ enum class ScanType {
 std::size_t next_power_of_two(std::size_t n);
 
 // Sequential reference implementations.
+void sequential_scan_into(
+    const std::vector<value_t>& input,
+    std::vector<value_t>& output,
+    ScanType scan_type
+);
 std::vector<value_t> sequential_exclusive_scan(const std::vector<value_t>& input);
 std::vector<value_t> sequential_inclusive_scan(const std::vector<value_t>& input);
 std::vector<value_t> sequential_scan(
@@ -41,6 +46,12 @@ std::vector<value_t> openmp_blelloch_scan(
 
 // Practical n > p OpenMP version:
 // local chunk scans, scan chunk sums, then add chunk offsets.
+void openmp_chunked_scan_into(
+    const std::vector<value_t>& input,
+    std::vector<value_t>& output,
+    int num_threads,
+    ScanType scan_type
+);
 std::vector<value_t> openmp_chunked_exclusive_scan(
     const std::vector<value_t>& input,
     int num_threads

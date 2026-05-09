@@ -214,7 +214,7 @@ int main(int argc, char** argv) {
 
         std::vector<scan::value_t> seq_output;
         const double seq_ms = benchmark_ms([&]() -> scan::value_t {
-            seq_output = scan::sequential_scan(input, options.scan_type);
+            scan::sequential_scan_into(input, seq_output, options.scan_type);
             return output_guard(seq_output);
         }, options.repeats);
 
@@ -256,8 +256,9 @@ int main(int argc, char** argv) {
                 }, options.repeats);
             } else if (label == "chunked") {
                 par_ms = benchmark_ms([&]() -> scan::value_t {
-                    par_output = scan::openmp_chunked_scan(
+                    scan::openmp_chunked_scan_into(
                         input,
+                        par_output,
                         options.threads,
                         options.scan_type
                     );

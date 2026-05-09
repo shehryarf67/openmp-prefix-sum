@@ -13,6 +13,11 @@ struct alignas(64) PaddedSum {
     value_t value = 0;
 };
 
+struct ChunkRange {
+    std::size_t start;
+    std::size_t end;
+};
+
 void validate_thread_count(int num_threads) {
     if (num_threads < 1) {
         throw std::invalid_argument("num_threads must be at least 1");
@@ -45,6 +50,16 @@ int get_actual_thread_count(int requested_threads) {
     }
 
     return actual_threads;
+}
+
+ChunkRange chunk_range(std::size_t n, int tid, int thread_count) {
+    const auto thread = static_cast<std::size_t>(tid);
+    const auto threads = static_cast<std::size_t>(thread_count);
+
+    return {
+        (n * thread) / threads,
+        (n * (thread + 1)) / threads
+    };
 }
 
 } // namespace
@@ -200,11 +215,10 @@ std::vector<value_t> openmp_chunked_exclusive_scan(
     #pragma omp parallel num_threads(actual_threads)
     {
         const int tid = omp_get_thread_num();
-        const std::size_t start = (n * static_cast<std::size_t>(tid)) / static_cast<std::size_t>(actual_threads);
-        const std::size_t end = (n * static_cast<std::size_t>(tid + 1)) / static_cast<std::size_t>(actual_threads);
+        const ChunkRange range = chunk_range(n, tid, actual_threads);
 
         value_t running_sum = 0;
-        for (std::size_t i = start; i < end; ++i) {
+        for (std::size_t i = range.start; i < range.end; ++i) {
             output[i] = running_sum;
             running_sum += input[i];
         }
@@ -213,7 +227,8 @@ std::vector<value_t> openmp_chunked_exclusive_scan(
 
     std::vector<value_t> chunk_sums(static_cast<std::size_t>(actual_threads), 0);
     for (int i = 0; i < actual_threads; ++i) {
-        chunk_sums[static_cast<std::size_t>(i)] = padded_chunk_sums[static_cast<std::size_t>(i)].value;
+        const auto index = static_cast<std::size_t>(i);
+        chunk_sums[index] = padded_chunk_sums[index].value;
     }
 
     // Scan chunk totals to compute each thread's global offset.
@@ -223,11 +238,10 @@ std::vector<value_t> openmp_chunked_exclusive_scan(
     #pragma omp parallel num_threads(actual_threads)
     {
         const int tid = omp_get_thread_num();
-        const std::size_t start = (n * static_cast<std::size_t>(tid)) / static_cast<std::size_t>(actual_threads);
-        const std::size_t end = (n * static_cast<std::size_t>(tid + 1)) / static_cast<std::size_t>(actual_threads);
+        const ChunkRange range = chunk_range(n, tid, actual_threads);
         const value_t offset = chunk_offsets[static_cast<std::size_t>(tid)];
 
-        for (std::size_t i = start; i < end; ++i) {
+        for (std::size_t i = range.start; i < range.end; ++i) {
             output[i] += offset;
         }
     }
@@ -255,11 +269,10 @@ std::vector<value_t> openmp_chunked_inclusive_scan(
     #pragma omp parallel num_threads(actual_threads)
     {
         const int tid = omp_get_thread_num();
-        const std::size_t start = (n * static_cast<std::size_t>(tid)) / static_cast<std::size_t>(actual_threads);
-        const std::size_t end = (n * static_cast<std::size_t>(tid + 1)) / static_cast<std::size_t>(actual_threads);
+        const ChunkRange range = chunk_range(n, tid, actual_threads);
 
         value_t running_sum = 0;
-        for (std::size_t i = start; i < end; ++i) {
+        for (std::size_t i = range.start; i < range.end; ++i) {
             running_sum += input[i];
             output[i] = running_sum;
         }
@@ -268,7 +281,8 @@ std::vector<value_t> openmp_chunked_inclusive_scan(
 
     std::vector<value_t> chunk_sums(static_cast<std::size_t>(actual_threads), 0);
     for (int i = 0; i < actual_threads; ++i) {
-        chunk_sums[static_cast<std::size_t>(i)] = padded_chunk_sums[static_cast<std::size_t>(i)].value;
+        const auto index = static_cast<std::size_t>(i);
+        chunk_sums[index] = padded_chunk_sums[index].value;
     }
 
     std::vector<value_t> chunk_offsets = openmp_blelloch_exclusive_scan(chunk_sums, actual_threads);
@@ -276,11 +290,10 @@ std::vector<value_t> openmp_chunked_inclusive_scan(
     #pragma omp parallel num_threads(actual_threads)
     {
         const int tid = omp_get_thread_num();
-        const std::size_t start = (n * static_cast<std::size_t>(tid)) / static_cast<std::size_t>(actual_threads);
-        const std::size_t end = (n * static_cast<std::size_t>(tid + 1)) / static_cast<std::size_t>(actual_threads);
+        const ChunkRange range = chunk_range(n, tid, actual_threads);
         const value_t offset = chunk_offsets[static_cast<std::size_t>(tid)];
 
-        for (std::size_t i = start; i < end; ++i) {
+        for (std::size_t i = range.start; i < range.end; ++i) {
             output[i] += offset;
         }
     }

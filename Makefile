@@ -6,7 +6,7 @@ TARGET := prefix_scan
 SRC := src/main.cpp src/scan.cpp
 HDR := src/scan.h src/scan.hpp
 
-.PHONY: all clean run test benchmark
+.PHONY: all clean run test benchmark plot
 
 all: $(TARGET)
 
@@ -21,6 +21,10 @@ test: $(TARGET)
 
 benchmark: $(TARGET)
 	./scripts/run_benchmarks.sh
+	python3 scripts/plot_results.py results.csv
+
+plot:
+	python3 scripts/plot_results.py results.csv
 
 clean:
-	rm -f $(TARGET) results.csv
+	rm -f $(TARGET) results.csv charts/*.svg

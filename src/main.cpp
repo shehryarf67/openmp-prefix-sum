@@ -148,7 +148,10 @@ bool run_correctness_tests() {
         thread_counts.push_back(max_threads);
     }
     std::sort(thread_counts.begin(), thread_counts.end());
-    thread_counts.erase(std::unique(thread_counts.begin(), thread_counts.end()), thread_counts.end());
+    thread_counts.erase(
+        std::unique(thread_counts.begin(), thread_counts.end()),
+        thread_counts.end()
+    );
 
     std::size_t checks = 0;
     std::size_t failures = 0;
@@ -216,7 +219,9 @@ int main(int argc, char** argv) {
         }, options.repeats);
 
         if (options.csv) {
-            std::cout << "n,threads,scan_type,mode,sequential_ms,parallel_ms,speedup,efficiency,status\n";
+            std::cout
+                << "n,threads,scan_type,mode,sequential_ms,"
+                << "parallel_ms,speedup,efficiency,status\n";
         }
 
         if (options.mode == "sequential") {
@@ -242,12 +247,20 @@ int main(int argc, char** argv) {
 
             if (label == "direct") {
                 par_ms = benchmark_ms([&]() -> scan::value_t {
-                    par_output = scan::openmp_blelloch_scan(input, options.threads, options.scan_type);
+                    par_output = scan::openmp_blelloch_scan(
+                        input,
+                        options.threads,
+                        options.scan_type
+                    );
                     return output_guard(par_output);
                 }, options.repeats);
             } else if (label == "chunked") {
                 par_ms = benchmark_ms([&]() -> scan::value_t {
-                    par_output = scan::openmp_chunked_scan(input, options.threads, options.scan_type);
+                    par_output = scan::openmp_chunked_scan(
+                        input,
+                        options.threads,
+                        options.scan_type
+                    );
                     return output_guard(par_output);
                 }, options.repeats);
             } else {

@@ -24,32 +24,32 @@
 <text x="866.0" y="510.0" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" font-weight="400" fill="#111827">8</text>
 <text x="474.0" y="538.0" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="400" fill="#111827">OpenMP threads</text>
 <text x="22" y="280.0" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#111827" transform="rotate(-90 22 280.0)">Speedup</text>
-<path d="M 82.0 273.9 L 343.3 371.0 L 604.7 394.8 L 866.0 468.2" fill="none" stroke="#2563eb" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="82.0" cy="273.9" r="4.4" fill="#2563eb" stroke="#ffffff" stroke-width="1.4"/>
-<circle cx="343.3" cy="371.0" r="4.4" fill="#2563eb" stroke="#ffffff" stroke-width="1.4"/>
-<circle cx="604.7" cy="394.8" r="4.4" fill="#2563eb" stroke="#ffffff" stroke-width="1.4"/>
-<circle cx="866.0" cy="468.2" r="4.4" fill="#2563eb" stroke="#ffffff" stroke-width="1.4"/>
+<path d="M 82.0 239.5 L 343.3 386.6 L 604.7 396.4 L 866.0 468.1" fill="none" stroke="#2563eb" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="82.0" cy="239.5" r="4.4" fill="#2563eb" stroke="#ffffff" stroke-width="1.4"/>
+<circle cx="343.3" cy="386.6" r="4.4" fill="#2563eb" stroke="#ffffff" stroke-width="1.4"/>
+<circle cx="604.7" cy="396.4" r="4.4" fill="#2563eb" stroke="#ffffff" stroke-width="1.4"/>
+<circle cx="866.0" cy="468.1" r="4.4" fill="#2563eb" stroke="#ffffff" stroke-width="1.4"/>
 <line x1="98" y1="64" x2="122" y2="64" stroke="#2563eb" stroke-width="3"/>
 <text x="130.0" y="68.0" text-anchor="start" font-family="Arial, sans-serif" font-size="12" font-weight="400" fill="#374151">n=10K</text>
-<path d="M 82.0 225.2 L 343.3 141.7 L 604.7 229.8 L 866.0 347.0" fill="none" stroke="#dc2626" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="82.0" cy="225.2" r="4.4" fill="#dc2626" stroke="#ffffff" stroke-width="1.4"/>
-<circle cx="343.3" cy="141.7" r="4.4" fill="#dc2626" stroke="#ffffff" stroke-width="1.4"/>
-<circle cx="604.7" cy="229.8" r="4.4" fill="#dc2626" stroke="#ffffff" stroke-width="1.4"/>
-<circle cx="866.0" cy="347.0" r="4.4" fill="#dc2626" stroke="#ffffff" stroke-width="1.4"/>
+<path d="M 82.0 205.4 L 343.3 245.1 L 604.7 250.3 L 866.0 379.7" fill="none" stroke="#dc2626" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="82.0" cy="205.4" r="4.4" fill="#dc2626" stroke="#ffffff" stroke-width="1.4"/>
+<circle cx="343.3" cy="245.1" r="4.4" fill="#dc2626" stroke="#ffffff" stroke-width="1.4"/>
+<circle cx="604.7" cy="250.3" r="4.4" fill="#dc2626" stroke="#ffffff" stroke-width="1.4"/>
+<circle cx="866.0" cy="379.7" r="4.4" fill="#dc2626" stroke="#ffffff" stroke-width="1.4"/>
 <line x1="253" y1="64" x2="277" y2="64" stroke="#dc2626" stroke-width="3"/>
 <text x="285.0" y="68.0" text-anchor="start" font-family="Arial, sans-serif" font-size="12" font-weight="400" fill="#374151">n=100K</text>
-<path d="M 82.0 235.6 L 343.3 232.4 L 604.7 243.5 L 866.0 258.7" fill="none" stroke="#16a34a" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="82.0" cy="235.6" r="4.4" fill="#16a34a" stroke="#ffffff" stroke-width="1.4"/>
-<circle cx="343.3" cy="232.4" r="4.4" fill="#16a34a" stroke="#ffffff" stroke-width="1.4"/>
-<circle cx="604.7" cy="243.5" r="4.4" fill="#16a34a" stroke="#ffffff" stroke-width="1.4"/>
-<circle cx="866.0" cy="258.7" r="4.4" fill="#16a34a" stroke="#ffffff" stroke-width="1.4"/>
+<path d="M 82.0 221.2 L 343.3 263.9 L 604.7 245.6 L 866.0 254.4" fill="none" stroke="#16a34a" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="82.0" cy="221.2" r="4.4" fill="#16a34a" stroke="#ffffff" stroke-width="1.4"/>
+<circle cx="343.3" cy="263.9" r="4.4" fill="#16a34a" stroke="#ffffff" stroke-width="1.4"/>
+<circle cx="604.7" cy="245.6" r="4.4" fill="#16a34a" stroke="#ffffff" stroke-width="1.4"/>
+<circle cx="866.0" cy="254.4" r="4.4" fill="#16a34a" stroke="#ffffff" stroke-width="1.4"/>
 <line x1="408" y1="64" x2="432" y2="64" stroke="#16a34a" stroke-width="3"/>
 <text x="440.0" y="68.0" text-anchor="start" font-family="Arial, sans-serif" font-size="12" font-weight="400" fill="#374151">n=1M</text>
-<path d="M 82.0 305.2 L 343.3 354.6 L 604.7 363.7 L 866.0 277.2" fill="none" stroke="#9333ea" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="82.0" cy="305.2" r="4.4" fill="#9333ea" stroke="#ffffff" stroke-width="1.4"/>
-<circle cx="343.3" cy="354.6" r="4.4" fill="#9333ea" stroke="#ffffff" stroke-width="1.4"/>
-<circle cx="604.7" cy="363.7" r="4.4" fill="#9333ea" stroke="#ffffff" stroke-width="1.4"/>
-<circle cx="866.0" cy="277.2" r="4.4" fill="#9333ea" stroke="#ffffff" stroke-width="1.4"/>
+<path d="M 82.0 305.4 L 343.3 314.0 L 604.7 305.1 L 866.0 296.0" fill="none" stroke="#9333ea" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="82.0" cy="305.4" r="4.4" fill="#9333ea" stroke="#ffffff" stroke-width="1.4"/>
+<circle cx="343.3" cy="314.0" r="4.4" fill="#9333ea" stroke="#ffffff" stroke-width="1.4"/>
+<circle cx="604.7" cy="305.1" r="4.4" fill="#9333ea" stroke="#ffffff" stroke-width="1.4"/>
+<circle cx="866.0" cy="296.0" r="4.4" fill="#9333ea" stroke="#ffffff" stroke-width="1.4"/>
 <line x1="563" y1="64" x2="587" y2="64" stroke="#9333ea" stroke-width="3"/>
 <text x="595.0" y="68.0" text-anchor="start" font-family="Arial, sans-serif" font-size="12" font-weight="400" fill="#374151">n=10M</text>
 </svg>
